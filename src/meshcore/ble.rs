@@ -155,8 +155,10 @@ impl MeshCore {
         Ok((MeshCore::new_with_sender(tx), rx, tx_char))
     }
 
-    /// Given a peripheral's name, get the peripheral object
-    async fn find_peripheral(target_name: &str) -> crate::Result<Peripheral> {
+    /// Given a peripheral's name or mac address (as a &str formatted thus
+    /// "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}" using BDAddr.to_string()),
+    /// return the [Peripheral] struct
+    async fn find_peripheral(target_name_or_mac: &str) -> crate::Result<Peripheral> {
         let manager = Manager::new()
             .await
             .map_err(|e| Error::connection(format!("Failed to create BLE manager: {}", e)))?;
@@ -190,7 +192,13 @@ impl MeshCore {
                     if let CentralEvent::DeviceDiscovered(id) = event {
                         if let Ok(peripheral) = adapter.peripheral(&id).await {
                             if let Ok(Some(props)) = peripheral.properties().await {
-                                if props.local_name.as_deref() == Some(target_name) {
+                                // return this peripheral if the name matches
+                                if props.local_name.as_deref() == Some(target_name_or_mac) {
+                                    return Some(peripheral);
+                                }
+
+                                // return this peripheral if the MAC address matches
+                                if props.address.to_string() == target_name_or_mac {
                                     return Some(peripheral);
                                 }
                             }
