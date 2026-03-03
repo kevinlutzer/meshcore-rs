@@ -93,7 +93,7 @@ sub.unsubscribe().await;
 ### Device Commands
 
 - `send_appstart()` - Initialize connection, get device info
-- `get_bat()` - Get battery level
+- `get_bat()` - Get battery voltage (millivolts) and storage info
 - `get_time()` / `set_time()` - Get/set device time
 - `set_name()` - Set device name
 - `set_coords()` - Set device coordinates

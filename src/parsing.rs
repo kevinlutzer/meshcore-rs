@@ -292,7 +292,7 @@ pub fn parse_status(data: &[u8], sender_prefix: [u8; 6]) -> Result<StatusData> {
         )));
     }
 
-    let battery = read_u16_le(data, 0)?;
+    let battery_mv = read_u16_le(data, 0)?;
     let tx_queue_len = read_u16_le(data, 2)?;
     let noise_floor = read_i16_le(data, 4)?;
     let last_rssi = read_i16_le(data, 6)?;
@@ -310,7 +310,7 @@ pub fn parse_status(data: &[u8], sender_prefix: [u8; 6]) -> Result<StatusData> {
     let rx_airtime = read_u32_le(data, 40)?;
 
     Ok(StatusData {
-        battery,
+        battery_mv,
         tx_queue_len,
         noise_floor,
         last_rssi,
@@ -848,8 +848,8 @@ mod tests {
     #[test]
     fn test_parse_status() {
         let mut data = vec![0u8; 52];
-        // battery at 0
-        data[0..2].copy_from_slice(&100u16.to_le_bytes());
+        // battery_mv at 0 (4.2V = 4200mV)
+        data[0..2].copy_from_slice(&4200u16.to_le_bytes());
         // tx_queue_len at 2
         data[2..4].copy_from_slice(&5u16.to_le_bytes());
         // noise_floor at 4
@@ -878,7 +878,7 @@ mod tests {
         let sender = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06];
         let status = parse_status(&data, sender).unwrap();
 
-        assert_eq!(status.battery, 100);
+        assert_eq!(status.battery_mv, 4200);
         assert_eq!(status.tx_queue_len, 5);
         assert_eq!(status.noise_floor, -90);
         assert_eq!(status.last_rssi, -50);

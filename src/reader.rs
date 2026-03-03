@@ -163,12 +163,24 @@ impl MessageReader {
             }
 
             PacketType::Battery => {
-                if payload.len() >= 4 {
-                    let level = read_u16_le(payload, 0).unwrap_or(0);
-                    let storage = read_u16_le(payload, 2).unwrap_or(0);
+                if payload.len() >= 2 {
+                    let battery_mv = read_u16_le(payload, 0).unwrap_or(0);
+                    // Storage info is optional and uses u32 fields
+                    let (used_kb, total_kb) = if payload.len() >= 10 {
+                        (
+                            Some(read_u32_le(payload, 2).unwrap_or(0)),
+                            Some(read_u32_le(payload, 6).unwrap_or(0)),
+                        )
+                    } else {
+                        (None, None)
+                    };
                     let event = MeshCoreEvent::new(
                         EventType::Battery,
-                        EventPayload::Battery(BatteryInfo { level, storage }),
+                        EventPayload::Battery(BatteryInfo {
+                            battery_mv,
+                            used_kb,
+                            total_kb,
+                        }),
                     );
                     self.dispatcher.emit(event).await;
                 }
@@ -782,9 +794,9 @@ mod tests {
         let (reader, dispatcher) = create_reader();
         let mut receiver = dispatcher.receiver();
 
+        // Test with just battery voltage (no storage info)
         let mut data = vec![PacketType::Battery as u8];
-        data.extend_from_slice(&85u16.to_le_bytes()); // level
-        data.extend_from_slice(&100u16.to_le_bytes()); // storage
+        data.extend_from_slice(&4200u16.to_le_bytes()); // battery_mv (4.2V)
 
         reader.handle_rx(data).await.unwrap();
 
@@ -796,8 +808,40 @@ mod tests {
         assert_eq!(event.event_type, EventType::Battery);
         match event.payload {
             EventPayload::Battery(info) => {
-                assert_eq!(info.level, 85);
-                assert_eq!(info.storage, 100);
+                assert_eq!(info.battery_mv, 4200);
+                assert!(info.used_kb.is_none());
+                assert!(info.total_kb.is_none());
+                assert!((info.voltage() - 4.2).abs() < 0.001);
+            }
+            _ => panic!("Expected Battery payload"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_rx_battery_with_storage() {
+        let (reader, dispatcher) = create_reader();
+        let mut receiver = dispatcher.receiver();
+
+        // Test with battery voltage and storage info
+        let mut data = vec![PacketType::Battery as u8];
+        data.extend_from_slice(&3700u16.to_le_bytes()); // battery_mv (3.7V)
+        data.extend_from_slice(&512u32.to_le_bytes()); // used_kb
+        data.extend_from_slice(&4096u32.to_le_bytes()); // total_kb
+
+        reader.handle_rx(data).await.unwrap();
+
+        let event = tokio::time::timeout(Duration::from_millis(100), receiver.recv())
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(event.event_type, EventType::Battery);
+        match event.payload {
+            EventPayload::Battery(info) => {
+                assert_eq!(info.battery_mv, 3700);
+                assert_eq!(info.used_kb, Some(512));
+                assert_eq!(info.total_kb, Some(4096));
+                assert!((info.voltage() - 3.7).abs() < 0.001);
             }
             _ => panic!("Expected Battery payload"),
         }
@@ -1706,7 +1750,7 @@ mod tests {
         data.extend_from_slice(&[0x01, 0x02, 0x03, 0x04, 0x05, 0x06]);
         // status data (52 bytes)
         let mut status_data = vec![0u8; 52];
-        status_data[0..2].copy_from_slice(&85u16.to_le_bytes()); // battery
+        status_data[0..2].copy_from_slice(&4200u16.to_le_bytes()); // battery_mv (4.2V)
         status_data[2..4].copy_from_slice(&5u16.to_le_bytes()); // tx_queue_len
         status_data[20..24].copy_from_slice(&86400u32.to_le_bytes()); // uptime
         data.extend_from_slice(&status_data);
@@ -1721,7 +1765,7 @@ mod tests {
         assert_eq!(event.event_type, EventType::StatusResponse);
         match event.payload {
             EventPayload::Status(status) => {
-                assert_eq!(status.battery, 85);
+                assert_eq!(status.battery_mv, 4200);
                 assert_eq!(status.uptime, 86400);
             }
             _ => panic!("Expected Status payload"),
