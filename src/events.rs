@@ -263,13 +263,40 @@ pub struct DeviceInfoData {
     pub repeat: Option<bool>,
 }
 
-/// Battery information
+/// Battery and storage information
 #[derive(Debug, Clone)]
 pub struct BatteryInfo {
-    /// Battery level (0-100 or raw value)
-    pub level: u16,
-    /// Storage available
-    pub storage: u16,
+    /// Battery voltage in millivolts
+    pub battery_mv: u16,
+    /// Used storage in KB (if available)
+    pub used_kb: Option<u32>,
+    /// Total storage in KB (if available)
+    pub total_kb: Option<u32>,
+}
+
+impl BatteryInfo {
+    /// Minimum battery voltage in millivolts (0% charge)
+    const MIN_MV: u16 = 3000;
+    /// Maximum battery voltage in millivolts (100% charge)
+    const MAX_MV: u16 = 3930;
+
+    /// Get battery voltage in volts
+    pub fn voltage(&self) -> f32 {
+        self.battery_mv as f32 / 1000.0
+    }
+
+    /// Get estimated battery percentage (0-100) based on voltage.
+    /// Uses linear interpolation: 3000mV = 0%, 3930mV = 100%
+    pub fn percentage(&self) -> u8 {
+        if self.battery_mv <= Self::MIN_MV {
+            0
+        } else if self.battery_mv >= Self::MAX_MV {
+            100
+        } else {
+            ((self.battery_mv - Self::MIN_MV) as u32 * 100 / (Self::MAX_MV - Self::MIN_MV) as u32)
+                as u8
+        }
+    }
 }
 
 /// Contact message - a direct message from a contact (identified by sender public key prefix)
@@ -351,8 +378,8 @@ pub struct MsgSentInfo {
 /// Status data from a device
 #[derive(Debug, Clone)]
 pub struct StatusData {
-    /// Battery level
-    pub battery: u16,
+    /// Battery voltage in millivolts
+    pub battery_mv: u16,
     /// TX queue length
     pub tx_queue_len: u16,
     /// Noise floor (dBm)
@@ -1240,11 +1267,84 @@ mod tests {
     #[test]
     fn test_battery_info_debug() {
         let info = BatteryInfo {
-            level: 85,
-            storage: 100,
+            battery_mv: 4200,
+            used_kb: Some(512),
+            total_kb: Some(4096),
         };
         let debug_str = format!("{:?}", info);
-        assert!(debug_str.contains("85"));
+        assert!(debug_str.contains("4200"));
+    }
+
+    #[test]
+    fn test_battery_info_voltage() {
+        let info = BatteryInfo {
+            battery_mv: 3700,
+            used_kb: None,
+            total_kb: None,
+        };
+        assert!((info.voltage() - 3.7).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_battery_info_no_storage() {
+        let info = BatteryInfo {
+            battery_mv: 4100,
+            used_kb: None,
+            total_kb: None,
+        };
+        assert_eq!(info.battery_mv, 4100);
+        assert!(info.used_kb.is_none());
+        assert!(info.total_kb.is_none());
+    }
+
+    #[test]
+    fn test_battery_info_percentage_full() {
+        let info = BatteryInfo {
+            battery_mv: 3930,
+            used_kb: None,
+            total_kb: None,
+        };
+        assert_eq!(info.percentage(), 100);
+    }
+
+    #[test]
+    fn test_battery_info_percentage_empty() {
+        let info = BatteryInfo {
+            battery_mv: 3000,
+            used_kb: None,
+            total_kb: None,
+        };
+        assert_eq!(info.percentage(), 0);
+    }
+
+    #[test]
+    fn test_battery_info_percentage_half() {
+        let info = BatteryInfo {
+            battery_mv: 3465, // midpoint between 3000 and 3930
+            used_kb: None,
+            total_kb: None,
+        };
+        assert_eq!(info.percentage(), 50);
+    }
+
+    #[test]
+    fn test_battery_info_percentage_below_min() {
+        let info = BatteryInfo {
+            battery_mv: 2800,
+            used_kb: None,
+            total_kb: None,
+        };
+        assert_eq!(info.percentage(), 0);
+    }
+
+    #[test]
+    fn test_battery_info_percentage_above_max() {
+        let info = BatteryInfo {
+            battery_mv: 4200,
+            used_kb: None,
+            total_kb: None,
+        };
+        assert_eq!(info.percentage(), 100);
     }
 
     #[test]

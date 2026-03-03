@@ -31,7 +31,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Get battery info
     let battery = meshcore.commands().lock().await.get_bat().await?;
-    println!("  Battery: {}%", battery.level);
+    println!(
+        "  Battery: {}mV ({:.2}V, {}%)",
+        battery.battery_mv,
+        battery.voltage(),
+        battery.percentage()
+    );
 
     // Get contacts
     println!("\nFetching contacts...");

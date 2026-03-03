@@ -1437,8 +1437,9 @@ mod tests {
             assert_eq!(sent[0], CMD_GET_BATT_AND_STORAGE);
 
             let info = BatteryInfo {
-                level: 85,
-                storage: 100,
+                battery_mv: 4200,
+                used_kb: Some(512),
+                total_kb: Some(4096),
             };
             dispatcher_clone
                 .emit(MeshCoreEvent::new(
@@ -1451,7 +1452,8 @@ mod tests {
         let result = handler.get_bat().await;
         assert!(result.is_ok());
         let info = result.unwrap();
-        assert_eq!(info.level, 85);
+        assert_eq!(info.battery_mv, 4200);
+        assert!((info.voltage() - 4.2).abs() < 0.001);
     }
 
     #[tokio::test]
