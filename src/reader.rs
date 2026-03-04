@@ -1553,6 +1553,58 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_handle_rx_channel_info_too_short() {
+        let (reader, dispatcher) = create_reader();
+        let mut receiver = dispatcher.receiver();
+
+        // Payload shorter than CHANNEL_INFO_LEN (49 bytes) should not emit event
+        let mut data = vec![PacketType::ChannelInfo as u8];
+        data.push(1); // channel_idx
+        let name = [0u8; CHANNEL_NAME_LEN];
+        data.extend_from_slice(&name);
+        // Missing secret - only 33 bytes total, need 49
+
+        reader.handle_rx(data).await.unwrap();
+
+        // Should timeout because no event is emitted for short payload
+        let result = tokio::time::timeout(Duration::from_millis(50), receiver.recv()).await;
+        assert!(result.is_err(), "Should not emit event for short payload");
+    }
+
+    #[tokio::test]
+    async fn test_handle_rx_channel_info_max_name_length() {
+        let (reader, dispatcher) = create_reader();
+        let mut receiver = dispatcher.receiver();
+
+        let mut data = vec![PacketType::ChannelInfo as u8];
+        data.push(3); // channel_idx
+                      // Fill name with 31 chars + null terminator
+        let mut name = [0u8; CHANNEL_NAME_LEN];
+        let long_name = b"This is a very long channel nam"; // 31 chars
+        name[..31].copy_from_slice(long_name);
+        data.extend_from_slice(&name);
+        data.extend_from_slice(&[0xBB; CHANNEL_SECRET_LEN]);
+
+        reader.handle_rx(data).await.unwrap();
+
+        let event = tokio::time::timeout(Duration::from_millis(100), receiver.recv())
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(event.event_type, EventType::ChannelInfo);
+        match event.payload {
+            EventPayload::ChannelInfo(info) => {
+                assert_eq!(info.channel_idx, 3);
+                assert_eq!(info.name, "This is a very long channel nam");
+                assert_eq!(info.name.len(), 31);
+                assert_eq!(info.secret, [0xBB; CHANNEL_SECRET_LEN]);
+            }
+            _ => panic!("Expected ChannelInfo payload"),
+        }
+    }
+
+    #[tokio::test]
     async fn test_handle_rx_advertisement() {
         let (reader, dispatcher) = create_reader();
         let mut receiver = dispatcher.receiver();

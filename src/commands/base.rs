@@ -1689,6 +1689,63 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_set_channel_success() {
+        let (handler, mut rx, dispatcher) = create_test_handler();
+
+        let dispatcher_clone = dispatcher.clone();
+        tokio::spawn(async move {
+            let sent = rx.recv().await.unwrap();
+            assert_eq!(sent[0], CMD_SET_CHANNEL);
+            assert_eq!(sent[1], 1); // channel_idx
+                                    // Verify name is padded to CHANNEL_NAME_LEN bytes
+            assert_eq!(sent.len(), 1 + 1 + CHANNEL_NAME_LEN + CHANNEL_SECRET_LEN);
+            // Check name starts with "Test"
+            assert_eq!(&sent[2..6], b"Test");
+            // Check rest of name is zero-padded
+            assert!(sent[6..2 + CHANNEL_NAME_LEN].iter().all(|&b| b == 0));
+            // Check secret
+            assert_eq!(&sent[2 + CHANNEL_NAME_LEN..], &[0xAA; CHANNEL_SECRET_LEN]);
+
+            dispatcher_clone
+                .emit(MeshCoreEvent::new(EventType::Ok, EventPayload::None))
+                .await;
+        });
+
+        let secret = [0xAA; CHANNEL_SECRET_LEN];
+        let result = handler.set_channel(1, "Test", &secret).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_set_channel_name_truncation() {
+        let (handler, mut rx, dispatcher) = create_test_handler();
+
+        let dispatcher_clone = dispatcher.clone();
+        tokio::spawn(async move {
+            let sent = rx.recv().await.unwrap();
+            assert_eq!(sent[0], CMD_SET_CHANNEL);
+            // Verify name is truncated to CHANNEL_NAME_LEN bytes
+            assert_eq!(sent.len(), 1 + 1 + CHANNEL_NAME_LEN + CHANNEL_SECRET_LEN);
+            // Name should be truncated - first 32 bytes of the long name
+            let expected_name = b"This is a very long channel name";
+            assert_eq!(
+                &sent[2..2 + CHANNEL_NAME_LEN],
+                &expected_name[..CHANNEL_NAME_LEN]
+            );
+
+            dispatcher_clone
+                .emit(MeshCoreEvent::new(EventType::Ok, EventPayload::None))
+                .await;
+        });
+
+        let secret = [0xBB; CHANNEL_SECRET_LEN];
+        // Name longer than CHANNEL_NAME_LEN should be truncated
+        let long_name = "This is a very long channel name that exceeds the limit";
+        let result = handler.set_channel(2, long_name, &secret).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
     async fn test_sign_start_success() {
         let (handler, mut rx, dispatcher) = create_test_handler();
 
