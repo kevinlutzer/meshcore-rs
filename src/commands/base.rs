@@ -62,6 +62,7 @@ const CMD_SIGN_FINISH: u8 = 35;
 const CMD_GET_CUSTOM_VARS: u8 = 40;
 const CMD_SET_CUSTOM_VAR: u8 = 41;
 const CMD_SEND_BINARY_REQ: u8 = 50;
+const CMD_SET_FLOOD_SCOPE: u8 = 54;
 
 /// Destination type for commands
 #[derive(Debug, Clone)]
@@ -462,6 +463,20 @@ impl CommandHandler {
         name_bytes[..name_len].copy_from_slice(&name.as_bytes()[..name_len]);
         data.extend_from_slice(&name_bytes);
         data.extend_from_slice(secret);
+        self.send(&data, Some(EventType::Ok)).await?;
+        Ok(())
+    }
+
+    /// Set flood scope (region code)
+    ///
+    /// Format: [CMD_SET_FLOOD_SCOPE=0x36][0][scope: 16 bytes]
+    /// Format: [CMD_SET_FLOOD_SCOPE=0x36][0] (to reset flood scope)
+    pub async fn set_flood_scope(&self, scope: Option<&str>) -> Result<()> {
+        let mut data = vec![CMD_SET_FLOOD_SCOPE, 0];
+        if let Some(scope) = scope {
+            data.extend_from_slice(scope.as_bytes());
+            data.resize(18, 0u8);
+        }
         self.send(&data, Some(EventType::Ok)).await?;
         Ok(())
     }
