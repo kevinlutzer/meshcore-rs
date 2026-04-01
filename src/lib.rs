@@ -66,7 +66,7 @@ pub mod reader;
 mod meshcore;
 
 // Protocol constants
-/// Length of channel name field in bytes
+/// Length of the channel name field in bytes
 pub const CHANNEL_NAME_LEN: usize = 32;
 /// Length of channel secret field in bytes
 pub const CHANNEL_SECRET_LEN: usize = 16;

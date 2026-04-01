@@ -33,7 +33,7 @@ pub enum Error {
     #[error("Invalid parameter: {0}")]
     InvalidParameter(String),
 
-    /// Feature is disabled on device
+    /// Feature is disabled on a device
     #[error("Feature disabled: {0}")]
     Disabled(String),
 

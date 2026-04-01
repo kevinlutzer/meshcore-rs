@@ -281,6 +281,7 @@ impl BatteryInfo {
     const MIN_MV: u16 = 3000;
     /// Maximum battery voltage in millivolts (100% charge)
     const MAX_MV: u16 = 3930;
+    const RANGE_MV: u16 = Self::MAX_MV - Self::MIN_MV;
 
     /// Get battery voltage in volts
     pub fn voltage(&self) -> f32 {
@@ -295,8 +296,8 @@ impl BatteryInfo {
         } else if self.battery_mv >= Self::MAX_MV {
             100
         } else {
-            ((self.battery_mv - Self::MIN_MV) as u32 * 100 / (Self::MAX_MV - Self::MIN_MV) as u32)
-                as u8
+            let level = self.battery_mv.saturating_sub(Self::MIN_MV);
+            ((level as u32).saturating_mul(100) / Self::RANGE_MV as u32) as u8
         }
     }
 }
@@ -490,11 +491,11 @@ pub struct AclEntry {
 pub struct NeighboursData {
     /// Total neighbours available
     pub total: u16,
-    /// Neighbours in this response
+    /// Neighbors in this response
     pub neighbours: Vec<Neighbour>,
 }
 
-/// Single neighbour entry
+/// Single neighbor entry
 #[derive(Debug, Clone)]
 pub struct Neighbour {
     /// Public key (variable length)
@@ -1261,7 +1262,7 @@ mod tests {
         };
 
         let id = msg.message_id();
-        // channel_idx in first byte, timestamp in last 4 bytes
+        // channel_idx in the first byte, timestamp in the last 4 bytes
         // 0x05_00_00_00_12345678
         assert_eq!(id, 0x0500000012345678);
     }

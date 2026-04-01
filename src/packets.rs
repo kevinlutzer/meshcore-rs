@@ -126,7 +126,7 @@ pub enum BinaryReqType {
     Mma = 0x04,
     /// Access Control Lists
     Acl = 0x05,
-    /// Network neighbour discovery
+    /// Network neighbor discovery
     Neighbours = 0x06,
 }
 

@@ -280,7 +280,7 @@ impl CommandHandler {
 
     // ========== Device Commands ==========
 
-    /// Send APPSTART command to initialise connection
+    /// Send APPSTART command to initialize connection
     ///
     /// Format: [CMD_APP_START=0x01][reserved: 7 bytes][app_name: "mccli"]
     pub async fn send_appstart(&self) -> Result<SelfInfo> {
@@ -454,7 +454,7 @@ impl CommandHandler {
     /// Set channel
     ///
     /// Format: [CMD_SET_CHANNEL=0x20][channel_idx][name: CHANNEL_NAME_LEN bytes][secret: CHANNEL_SECRET_LEN bytes]
-    /// Note: name is null-terminated, so max usable length is CHANNEL_NAME_LEN - 1 bytes
+    /// Note: name is null-terminated, so the max usable length is CHANNEL_NAME_LEN - 1 bytes
     pub async fn set_channel(
         &self,
         channel_idx: u8,
@@ -462,9 +462,9 @@ impl CommandHandler {
         secret: &[u8; CHANNEL_SECRET_LEN],
     ) -> Result<()> {
         let mut data = vec![CMD_SET_CHANNEL, channel_idx];
-        // Pad or truncate name to CHANNEL_NAME_LEN bytes, reserving last byte for null terminator
+        // Pad or truncate the name to CHANNEL_NAME_LEN bytes, reserving the last byte for null terminator
         let mut name_bytes = [0u8; CHANNEL_NAME_LEN];
-        // Max usable length is CHANNEL_NAME_LEN - 1 to ensure null termination
+        // The Max usable length is CHANNEL_NAME_LEN - 1 to ensure null termination
         let name_len = name.len().min(CHANNEL_NAME_LEN - 1);
         name_bytes[..name_len].copy_from_slice(&name.as_bytes()[..name_len]);
         // name_bytes[name_len..] is already zero (null terminator guaranteed)
@@ -1410,7 +1410,7 @@ mod tests {
         let dispatcher_clone = dispatcher.clone();
         tokio::spawn(async move {
             let sent = rx.recv().await.unwrap();
-            // Verify APPSTART command format
+            // Verify the APPSTART command format
             assert_eq!(sent[0], CMD_APP_START);
             assert_eq!(&sent[8..13], b"mccli");
 
@@ -1719,7 +1719,7 @@ mod tests {
             assert_eq!(sent.len(), 1 + 1 + CHANNEL_NAME_LEN + CHANNEL_SECRET_LEN);
             // Check name starts with "Test"
             assert_eq!(&sent[2..6], b"Test");
-            // Check rest of name is zero-padded
+            // Check the rest of the name is zero-padded
             assert!(sent[6..2 + CHANNEL_NAME_LEN].iter().all(|&b| b == 0));
             // Check secret
             assert_eq!(&sent[2 + CHANNEL_NAME_LEN..], &[0xAA; CHANNEL_SECRET_LEN]);
@@ -1742,15 +1742,15 @@ mod tests {
         tokio::spawn(async move {
             let sent = rx.recv().await.unwrap();
             assert_eq!(sent[0], CMD_SET_CHANNEL);
-            // Verify total length is correct
+            // Verify the total length is correct
             assert_eq!(sent.len(), 1 + 1 + CHANNEL_NAME_LEN + CHANNEL_SECRET_LEN);
-            // Name should be truncated to CHANNEL_NAME_LEN - 1 bytes to leave room for null
+            // Name should be truncated to CHANNEL_NAME_LEN - 1 byte to leave room for null
             let expected_name = b"This is a very long channel nam"; // 31 bytes
             assert_eq!(
                 &sent[2..2 + CHANNEL_NAME_LEN - 1],
                 &expected_name[..CHANNEL_NAME_LEN - 1]
             );
-            // Last byte of name field must be null terminator
+            // The last byte of the name field must be null terminator
             assert_eq!(
                 sent[2 + CHANNEL_NAME_LEN - 1],
                 0,

@@ -1557,7 +1557,7 @@ mod tests {
         let (reader, dispatcher) = create_reader();
         let mut receiver = dispatcher.receiver();
 
-        // Payload shorter than CHANNEL_INFO_LEN (49 bytes) should not emit event
+        // Payload shorter than CHANNEL_INFO_LEN (49 bytes) should not emit the event
         let mut data = vec![PacketType::ChannelInfo as u8];
         data.push(1); // channel_idx
         let name = [0u8; CHANNEL_NAME_LEN];
@@ -1566,7 +1566,7 @@ mod tests {
 
         reader.handle_rx(data).await.unwrap();
 
-        // Should timeout because no event is emitted for short payload
+        // Should the timeout because no event is emitted for a short payload
         let result = tokio::time::timeout(Duration::from_millis(50), receiver.recv()).await;
         assert!(result.is_err(), "Should not emit event for short payload");
     }
@@ -1973,7 +1973,7 @@ mod tests {
         let (reader, dispatcher) = create_reader();
         let mut receiver = dispatcher.receiver();
 
-        // Register a pending Neighbours request
+        // Register a pending Neighbors request
         reader
             .register_binary_request(
                 &[0x01, 0x02, 0x03, 0x04],
