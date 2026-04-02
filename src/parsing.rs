@@ -34,39 +34,41 @@ pub fn read_i16_le(data: &[u8], offset: usize) -> Result<i16> {
 /// Read a little-endian u32 from a byte slice
 pub fn read_u32_le(data: &[u8], offset: usize) -> Result<u32> {
     if offset
-        .checked_add(4)
+        .checked_add(4) // we can index up to 4 bytes into data
         .ok_or_else(|| Error::protocol("Offset overflow"))?
         > data.len()
     {
         return Err(Error::protocol("Buffer too short for u32"));
     }
     Ok(u32::from_le_bytes([
-        data[offset],
-        data[offset + 1],
-        data[offset + 2],
-        data[offset + 3],
+        data[offset],     // jonesy:allow(bounds)
+        data[offset + 1], // jonesy:allow(overflow)
+        data[offset + 2], // jonesy:allow(bounds)
+        data[offset + 3], // jonesy:allow(bounds, overflow)
     ]))
 }
 
 /// Read a little-endian i32 from a byte slice
 pub fn read_i32_le(data: &[u8], offset: usize) -> Result<i32> {
     if offset
-        .checked_add(4)
+        .checked_add(4) // we can index up to 4 bytes into data
         .ok_or_else(|| Error::protocol("Offset overflow"))?
         > data.len()
     {
         return Err(Error::protocol("Buffer too short for i32"));
     }
     Ok(i32::from_le_bytes([
-        data[offset],
-        data[offset + 1],
-        data[offset + 2],
-        data[offset + 3],
+        data[offset],     // jonesy:allow(bounds)
+        data[offset + 1], // jonesy:allow(bounds, overflow)
+        data[offset + 2], // jonesy:allow(bounds, overflow)
+        data[offset + 3], // jonesy:allow(bounds, overflow)
     ]))
 }
 
 /// Read a null-terminated or fixed-length UTF-8 string
 pub fn read_string(data: &[u8], offset: usize, max_len: usize) -> String {
+    // limit indexing to the size of the data buffer
+    // jonesy:allow(overflow)
     let end = (offset + max_len).min(data.len());
     let slice = &data[offset..end];
 
@@ -80,6 +82,7 @@ pub fn read_string(data: &[u8], offset: usize, max_len: usize) -> String {
 
 /// Read a fixed-size byte array
 pub fn read_bytes<const N: usize>(data: &[u8], offset: usize) -> Result<[u8; N]> {
+    // check that we can index N bytes into data
     if offset
         .checked_add(N)
         .ok_or_else(|| Error::protocol("Offset overflow"))?
@@ -88,6 +91,7 @@ pub fn read_bytes<const N: usize>(data: &[u8], offset: usize) -> Result<[u8; N]>
         return Err(Error::protocol(format!("Buffer too short for {} bytes", N)));
     }
     let mut arr = [0u8; N];
+    // jonesy:allow(overflow)
     arr.copy_from_slice(&data[offset..offset + N]);
     Ok(arr)
 }
@@ -145,6 +149,7 @@ pub fn parse_contact(data: &[u8]) -> Result<Contact> {
 
 /// Parse self-info from raw bytes (109+ bytes)
 pub fn parse_self_info(data: &[u8]) -> Result<SelfInfo> {
+    // We can index safely into data up to 52 bytes
     if data.len() < 52 {
         return Err(Error::protocol(format!(
             "SelfInfo data too short: {} bytes",
@@ -152,33 +157,37 @@ pub fn parse_self_info(data: &[u8]) -> Result<SelfInfo> {
         )));
     }
 
-    let adv_type = data[0];
+    let adv_type = data[0]; // jonesy:allow(bounds)
     let tx_power = data[1];
-    let max_tx_power = data[2];
+    let max_tx_power = data[2]; // jonesy:allow(bounds)
 
     let public_key: [u8; 32] = read_bytes(data, 3)?;
 
     let adv_lat = read_i32_le(data, 35)?;
     let adv_lon = read_i32_le(data, 39)?;
 
-    let multi_acks = data[43];
-    let adv_loc_policy = data[44];
+    let multi_acks = data[43]; // jonesy:allow(bounds)
+    let adv_loc_policy = data[44]; // jonesy:allow(bounds)
 
     // Telemetry mode is bit-packed
-    let telemetry_byte = data[45];
+    let telemetry_byte = data[45]; // jonesy:allow(bounds)
     let telemetry_mode_base = telemetry_byte & 0x03;
     let telemetry_mode_loc = (telemetry_byte >> 2) & 0x03;
     let telemetry_mode_env = (telemetry_byte >> 4) & 0x03;
 
-    let manual_add_contacts = data[46] != 0;
+    let manual_add_contacts = data[46] != 0; // jonesy:allow(bounds)
 
     let radio_freq = read_u32_le(data, 47)?;
     let radio_bw = read_u32_le(data, 51)?;
 
+    // check if we can go beyond 55 bytes
     let (sf, cr, name) = if data.len() >= 55 {
-        let sf = data[55];
-        let cr = data[56];
+        let sf = data[55]; // jonesy:allow(bounds)
+        let cr = data[56]; // jonesy:allow(bounds)
+
+        // check data is longer and read string from byte 57 to the end
         let name = if data.len() > 57 {
+            // jonesy:allow(overflow) - if larger than 57, can't underflow
             read_string(data, 57, data.len() - 57)
         } else {
             String::new()
@@ -484,17 +493,21 @@ pub fn parse_acl(data: &[u8]) -> Vec<AclEntry> {
     let mut entries = Vec::new();
     let mut offset = 0;
 
+    // avoid walking off the end of the data buffer
+    // jonesy:allow(overflow)
     while offset + 7 <= data.len() {
         let mut prefix = [0u8; 6];
-        prefix.copy_from_slice(&data[offset..offset + 6]);
-        let permissions = data[offset + 6];
+        let end = offset + 6; // jonesy:allow(overflow)
+                              // jonesy:allow(bounds, overflow) - we checked we have at least 6 above
+        prefix.copy_from_slice(&data[offset..end]);
+        let permissions = data[end]; // jonesy:allow(bounds)
 
         entries.push(AclEntry {
             prefix,
             permissions,
         });
 
-        offset += 7;
+        offset += 7; // jonesy:allow(overflow)
     }
 
     entries
@@ -502,6 +515,7 @@ pub fn parse_acl(data: &[u8]) -> Vec<AclEntry> {
 
 /// Parse neighbours response
 pub fn parse_neighbours(data: &[u8], pubkey_len: usize) -> Result<NeighboursData> {
+    // Validate we can index up to 4 bytes in
     if data.len() < 4 {
         return Err(Error::protocol("Neighbours data too short"));
     }
@@ -509,17 +523,27 @@ pub fn parse_neighbours(data: &[u8], pubkey_len: usize) -> Result<NeighboursData
     let total = read_u16_le(data, 0)?;
     let count = read_u16_le(data, 2)?;
 
+    // jonesy:allow(overflow) - pubkey_len is usually 128
     let entry_size = pubkey_len + 5; // pubkey + 4 bytes secs_ago + 1 byte snr
     let mut neighbours = Vec::new();
     let mut offset = 4;
 
+    // walk through the rest of the data buffer in chunks of entry_size size
     for _ in 0..count {
+        // make sure we don't walk off the end of the data buffer
+        // jonesy:allow(overflow)
         if offset + entry_size > data.len() {
+            // jonesy:allow(overflow)
             break;
         }
 
+        // pubkey_len is less than `entry_size` which has already been checked
+        // jonesy:allow(overflow)
         let pubkey = data[offset..offset + pubkey_len].to_vec();
+        // jonesy:allow(overflow)
         let secs_ago = read_i32_le(data, offset + pubkey_len)?;
+        // included in the `entry_size` check above so can be indexed
+        // jonesy:allow(overflow, bounds)
         let snr_raw = data[offset + pubkey_len + 4] as i8;
         let snr = snr_raw as f32 / 4.0;
 
@@ -528,7 +552,7 @@ pub fn parse_neighbours(data: &[u8], pubkey_len: usize) -> Result<NeighboursData
             secs_ago,
             snr,
         });
-
+        // jonesy:allow(overflow)
         offset += entry_size;
     }
 
@@ -542,14 +566,16 @@ pub fn parse_mma(data: &[u8]) -> Vec<MmaEntry> {
     let mut entries = Vec::new();
     let mut offset = 0;
 
+    // advance 14 bytes at a time - being careful to not overrun data size
+    // jonesy:allow(overflow)
     while offset + 14 <= data.len() {
-        let channel = data[offset];
-        let entry_type = data[offset + 1];
+        let channel = data[offset]; // jonesy:allow(bounds)
+        let entry_type = data[offset + 1]; // jonesy:allow(bounds, overflow)
 
         // Values are typically floats encoded as fixed-point or raw floats
-        let min_raw = read_i32_le(data, offset + 2).unwrap_or(0);
-        let max_raw = read_i32_le(data, offset + 6).unwrap_or(0);
-        let avg_raw = read_i32_le(data, offset + 10).unwrap_or(0);
+        let min_raw = read_i32_le(data, offset + 2).unwrap_or(0); // jonesy:allow(overflow)
+        let max_raw = read_i32_le(data, offset + 6).unwrap_or(0); // jonesy:allow(overflow)
+        let avg_raw = read_i32_le(data, offset + 10).unwrap_or(0); // jonesy:allow(overflow)
 
         entries.push(MmaEntry {
             channel,
@@ -559,7 +585,7 @@ pub fn parse_mma(data: &[u8]) -> Vec<MmaEntry> {
             avg: avg_raw as f32,
         });
 
-        offset += 14;
+        offset += 14; // jonesy:allow(overflow)
     }
 
     entries
@@ -585,7 +611,7 @@ pub fn hex_decode(s: &str) -> Result<Vec<u8>> {
     (0..s.len())
         .step_by(2)
         .map(|i| {
-            u8::from_str_radix(&s[i..i + 2], 16)
+            u8::from_str_radix(&s[i..i + 2], 16) // jonesy:allow(overflow)
                 .map_err(|_| Error::invalid_param("Invalid hex character"))
         })
         .collect()

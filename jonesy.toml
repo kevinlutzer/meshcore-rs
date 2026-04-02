@@ -26,3 +26,19 @@ allow = ["bounds"]
 [[rules]]
 function = "meshcore_rs::parsing::parse_channel_msg_v3"
 allow = ["bounds"]
+
+[[rules]]
+function = "meshcore_rs::parsing::read_u16_le"
+allow = ["bounds"]
+
+[[rules]]
+function = "meshcore_rs::parsing::read_u16_le"
+allow = ["overflow"]
+
+[[rules]]
+function = "meshcore_rs::parsing::read_i16_le"
+allow = ["bounds"]
+
+[[rules]]
+function = "meshcore_rs::parsing::read_i16_le"
+allow = ["overflow"]
